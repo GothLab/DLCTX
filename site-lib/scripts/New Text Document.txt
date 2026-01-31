@@ -1,0 +1,105 @@
+scrollToHeader(t){
+    console.log("=== DEBUG scrollToHeader ===");
+    console.log("Input:", t);
+    
+    const cleanHash = decodeURIComponent(t).replace(/^#/, '');
+    console.log("Clean hash:", cleanHash);
+    
+    // Get all headers for reference
+    const allHeaders = this.getFlatHeaders();
+    
+    // Strategy 1: Try to reconstruct the likely ID pattern
+    const reconstructedId = this.reconstructHeaderId(cleanHash);
+    console.log("Reconstructed ID:", reconstructedId);
+    
+    let header = this.findHeader(e => e.id === reconstructedId);
+    
+    // Strategy 2: Try fuzzy matching
+    if (!header) {
+        console.log("\nTrying fuzzy matching...");
+        
+        // Create a normalized version of the hash for comparison
+        const normalizedHash = cleanHash
+            .toLowerCase()
+            .replace(/[^a-zа-я0-9]/g, '') // Remove all non-alphanumeric
+            .replace(/b$/, 'b)') // Handle the b) case
+            
+        console.log("Normalized hash:", normalizedHash);
+        
+        header = this.findHeader(e => {
+            // Normalize header ID similarly
+            const normalizedId = e.id
+                .toLowerCase()
+                .replace(/\*/g, '')      // Remove **
+                .replace(/<[^>]*>/g, '') // Remove HTML tags
+                .replace(/[^a-zа-я0-9]/g, '') // Keep only letters/numbers
+                .replace(/b$/, 'b)');    // Handle b) case
+                
+            console.log(`Comparing: "${normalizedHash}" vs "${normalizedId}"`);
+            
+            const match = normalizedId.includes(normalizedHash) || 
+                         normalizedHash.includes(normalizedId);
+            
+            if (match) {
+                console.log("✓ Fuzzy match found:", e.id);
+            }
+            return match;
+        });
+    }
+    
+    // Strategy 3: Match by extracting text content
+    if (!header) {
+        console.log("\nTrying text content extraction...");
+        
+        header = this.findHeader(e => {
+            // Extract just the text from the header (remove HTML)
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = e.headerElement?.innerHTML || '';
+            const headerText = tempDiv.textContent || tempDiv.innerText || '';
+            
+            // Create search text from hash
+            const searchText = cleanHash
+                .replace(/-/g, ' ')
+                .replace(/_/g, ' ');
+                
+            console.log(`Text comparison: "${searchText}" in "${headerText.substring(0, 100)}"`);
+            
+            const match = headerText.toLowerCase().includes(searchText.toLowerCase());
+            
+            if (match) {
+                console.log("✓ Text content match found");
+            }
+            return match;
+        });
+    }
+    
+    if (header) {
+        console.log("✓ SUCCESS: Scrolling to:", header.id);
+        header.scrollTo();
+    } else {
+        console.error("✗ FAILED: No match found");
+        console.log("Available headers:", allHeaders.map(h => ({
+            id: h.id,
+            text: h.text.substring(0, 80)
+        })));
+    }
+}
+
+reconstructHeaderId(hash) {
+    // Convert hash like "b-определение-характер-beschaffenheit-и-граница"
+    // to likely ID pattern
+    
+    // Replace hyphens with underscores
+    let id = hash.replace(/-/g, '_');
+    
+    // Handle special cases like "b)" at the beginning
+    if (hash.startsWith('b-')) {
+        id = `**_b_****_)${id.substring(2)}**_0`;
+    } else {
+        id = `**${id}**_0`;
+    }
+    
+    return id;
+}
+
+
